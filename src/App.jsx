@@ -7,6 +7,7 @@ import NuevaVenta from './pages/NuevaVenta'
 import Reporte from './pages/Reporte'
 import Productos from './pages/Productos'
 import Clientes from './pages/Clientes'
+import FormasPago from './pages/FormasPago'
 
 export default function App() {
   return (
@@ -50,6 +51,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Clientes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/formas-pago"
+          element={
+            <ProtectedRoute>
+              <FormasPago />
             </ProtectedRoute>
           }
         />

@@ -43,6 +43,17 @@ export default function Dashboard() {
           </div>
           <span className="text-4xl font-display text-gol">→</span>
         </Link>
+
+        <Link
+          to="/productos"
+          className="rounded-2xl bg-surface border border-line p-6 flex items-center justify-between active:scale-[0.98] transition"
+        >
+          <div>
+            <p className="font-display text-2xl font-semibold text-foam">Productos</p>
+            <p className="text-muted mt-1">Ver, añadir y modificar</p>
+          </div>
+          <span className="text-4xl font-display text-gol">→</span>
+        </Link>
       </div>
 
       <p className="text-center text-muted/60 text-xs mt-8">

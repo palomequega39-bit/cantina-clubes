@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import NuevaVenta from './pages/NuevaVenta'
 import Reporte from './pages/Reporte'
+import Productos from './pages/Productos'
 
 export default function App() {
   return (
@@ -32,6 +33,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Reporte />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/productos"
+          element={
+            <ProtectedRoute>
+              <Productos />
             </ProtectedRoute>
           }
         />

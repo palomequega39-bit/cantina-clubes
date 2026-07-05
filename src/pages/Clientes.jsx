@@ -5,11 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import { formatMoney, initials, colorFromString } from '../lib/format'
 
 const VACIO = { id: null, nombre: '', telefono: '', observaciones: '', activo: true }
-const FORMAS_PAGO = [
-  { value: 'EFECTIVO', label: 'Efectivo' },
-  { value: 'TARJETA', label: 'Tarjeta' },
-  { value: 'TRANSFERENCIA', label: 'Transferencia' },
-]
 
 export default function Clientes() {
   const navigate = useNavigate()
@@ -18,6 +13,7 @@ export default function Clientes() {
   const [view, setView] = useState('lista') // 'lista' | 'form' | 'detalle'
   const [clientes, setClientes] = useState([])
   const [saldos, setSaldos] = useState({}) // { cliente_id: saldo }
+  const [formasPago, setFormasPago] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -44,15 +40,23 @@ export default function Clientes() {
   async function cargarTodo() {
     setLoading(true)
     setError(null)
-    const [{ data: cli, error: e1 }, { data: sal, error: e2 }] = await Promise.all([
-      supabase.from('clientes').select('id, nombre, telefono, observaciones, activo').order('nombre'),
-      supabase.from('vw_saldo_clientes').select('id, saldo'),
-    ])
-    if (e1 || e2) setError((e1 || e2).message)
+    const [{ data: cli, error: e1 }, { data: sal, error: e2 }, { data: fps, error: e3 }] =
+      await Promise.all([
+        supabase.from('clientes').select('id, nombre, telefono, observaciones, activo').order('nombre'),
+        supabase.from('vw_saldo_clientes').select('id, saldo'),
+        supabase
+          .from('formas_pago')
+          .select('id, nombre, codigo')
+          .eq('activo', true)
+          .eq('requiere_cliente', false)
+          .order('nombre'),
+      ])
+    if (e1 || e2 || e3) setError((e1 || e2 || e3).message)
     setClientes(cli ?? [])
     const map = {}
     ;(sal ?? []).forEach((s) => (map[s.id] = Number(s.saldo)))
     setSaldos(map)
+    setFormasPago(fps ?? [])
     setLoading(false)
   }
 
@@ -189,6 +193,7 @@ export default function Clientes() {
           cliente={clienteActivo}
           saldo={saldos[clienteActivo.id] ?? 0}
           movimientos={movimientos}
+          formasPago={formasPago}
           cargando={cargandoMovs}
           onBack={() => setView('lista')}
           onEditar={() => abrirEdicion(clienteActivo)}
@@ -369,13 +374,17 @@ function FormView({ form, setForm, onBack, onGuardar, guardando, formError, esNu
   )
 }
 
-function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, onRegistrarPago }) {
+function DetalleView({ cliente, saldo, movimientos, formasPago, cargando, onBack, onEditar, onRegistrarPago }) {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [monto, setMonto] = useState('')
-  const [formaPago, setFormaPago] = useState('EFECTIVO')
+  const [formaPago, setFormaPago] = useState('')
   const [observacion, setObservacion] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [err, setErr] = useState(null)
+
+  useEffect(() => {
+    if (!formaPago && formasPago.length > 0) setFormaPago(formasPago[0].codigo)
+  }, [formasPago, formaPago])
 
   async function handlePago(e) {
     e.preventDefault()
@@ -385,13 +394,16 @@ function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, 
       setErr('Ingresá un monto válido.')
       return
     }
+    if (!formaPago) {
+      setErr('Elegí una forma de pago.')
+      return
+    }
     setEnviando(true)
     const ok = await onRegistrarPago(n, formaPago, observacion.trim())
     setEnviando(false)
     if (ok) {
       setMostrarForm(false)
       setMonto('')
-      setFormaPago('EFECTIVO')
       setObservacion('')
     }
   }
@@ -450,22 +462,28 @@ function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, 
           </div>
           <div>
             <label className="block text-muted text-sm mb-1.5">Forma de pago</label>
-            <div className="grid grid-cols-3 gap-2">
-              {FORMAS_PAGO.map((fp) => (
-                <button
-                  key={fp.value}
-                  type="button"
-                  onClick={() => setFormaPago(fp.value)}
-                  className={`h-12 rounded-xl border text-sm font-medium transition active:scale-[0.97] ${
-                    formaPago === fp.value
-                      ? 'bg-cancha text-ink border-cancha'
-                      : 'bg-surface-2 text-foam border-line'
-                  }`}
-                >
-                  {fp.label}
-                </button>
-              ))}
-            </div>
+            {formasPago.length === 0 ? (
+              <p className="text-alerta text-sm">
+                No hay formas de pago cargadas (fuera de "cuenta corriente").
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {formasPago.map((fp) => (
+                  <button
+                    key={fp.id}
+                    type="button"
+                    onClick={() => setFormaPago(fp.codigo)}
+                    className={`h-12 rounded-xl border text-sm font-medium transition active:scale-[0.97] ${
+                      formaPago === fp.codigo
+                        ? 'bg-cancha text-ink border-cancha'
+                        : 'bg-surface-2 text-foam border-line'
+                    }`}
+                  >
+                    {fp.nombre}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-muted text-sm mb-1.5">Observación (opcional)</label>
@@ -512,7 +530,13 @@ function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, 
             >
               <div className="min-w-0">
                 <p className="text-foam font-medium">
-                  {m.tipo === 'DEUDA' ? 'Consumo (fiado)' : `Pago${m.forma_pago ? ` · ${m.forma_pago}` : ''}`}
+                  {m.tipo === 'DEUDA'
+                    ? 'Consumo (fiado)'
+                    : `Pago${
+                        m.forma_pago
+                          ? ` · ${formasPago.find((fp) => fp.codigo === m.forma_pago)?.nombre ?? m.forma_pago}`
+                          : ''
+                      }`}
                 </p>
                 <p className="text-muted text-sm">
                   {new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}

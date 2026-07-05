@@ -5,6 +5,11 @@ import { useAuth } from '../context/AuthContext'
 import { formatMoney, initials, colorFromString } from '../lib/format'
 
 const VACIO = { id: null, nombre: '', telefono: '', observaciones: '', activo: true }
+const FORMAS_PAGO = [
+  { value: 'EFECTIVO', label: 'Efectivo' },
+  { value: 'TARJETA', label: 'Tarjeta' },
+  { value: 'TRANSFERENCIA', label: 'Transferencia' },
+]
 
 export default function Clientes() {
   const navigate = useNavigate()
@@ -81,7 +86,7 @@ export default function Clientes() {
     setCargandoMovs(true)
     const { data } = await supabase
       .from('cuenta_corriente_movimientos')
-      .select('id, fecha, tipo, importe, observacion')
+      .select('id, fecha, tipo, importe, forma_pago, observacion')
       .eq('cliente_id', c.id)
       .order('fecha', { ascending: false })
     setMovimientos(data ?? [])
@@ -118,12 +123,13 @@ export default function Clientes() {
     cargarTodo()
   }
 
-  async function registrarPago(monto, observacion) {
+  async function registrarPago(monto, formaPago, observacion) {
     const { error } = await supabase.from('cuenta_corriente_movimientos').insert({
       club_id: usuario.club_id,
       cliente_id: clienteActivo.id,
       tipo: 'PAGO',
       importe: monto,
+      forma_pago: formaPago,
       observacion: observacion || null,
     })
     if (error) {
@@ -366,6 +372,7 @@ function FormView({ form, setForm, onBack, onGuardar, guardando, formError, esNu
 function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, onRegistrarPago }) {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [monto, setMonto] = useState('')
+  const [formaPago, setFormaPago] = useState('EFECTIVO')
   const [observacion, setObservacion] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [err, setErr] = useState(null)
@@ -379,11 +386,12 @@ function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, 
       return
     }
     setEnviando(true)
-    const ok = await onRegistrarPago(n, observacion.trim())
+    const ok = await onRegistrarPago(n, formaPago, observacion.trim())
     setEnviando(false)
     if (ok) {
       setMostrarForm(false)
       setMonto('')
+      setFormaPago('EFECTIVO')
       setObservacion('')
     }
   }
@@ -441,6 +449,25 @@ function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, 
             />
           </div>
           <div>
+            <label className="block text-muted text-sm mb-1.5">Forma de pago</label>
+            <div className="grid grid-cols-3 gap-2">
+              {FORMAS_PAGO.map((fp) => (
+                <button
+                  key={fp.value}
+                  type="button"
+                  onClick={() => setFormaPago(fp.value)}
+                  className={`h-12 rounded-xl border text-sm font-medium transition active:scale-[0.97] ${
+                    formaPago === fp.value
+                      ? 'bg-cancha text-ink border-cancha'
+                      : 'bg-surface-2 text-foam border-line'
+                  }`}
+                >
+                  {fp.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
             <label className="block text-muted text-sm mb-1.5">Observación (opcional)</label>
             <input
               type="text"
@@ -485,7 +512,7 @@ function DetalleView({ cliente, saldo, movimientos, cargando, onBack, onEditar, 
             >
               <div className="min-w-0">
                 <p className="text-foam font-medium">
-                  {m.tipo === 'DEUDA' ? 'Consumo (fiado)' : 'Pago'}
+                  {m.tipo === 'DEUDA' ? 'Consumo (fiado)' : `Pago${m.forma_pago ? ` · ${m.forma_pago}` : ''}`}
                 </p>
                 <p className="text-muted text-sm">
                   {new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}

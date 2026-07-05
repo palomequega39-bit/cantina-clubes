@@ -31,3 +31,14 @@ export function todayRangeISO() {
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
   return { start: start.toISOString(), end: end.toISOString() }
 }
+
+// Convierte "Mercado Pago" -> "MERCADO_PAGO" (identificador interno estable)
+export function slugify(text) {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // saca acentos
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}

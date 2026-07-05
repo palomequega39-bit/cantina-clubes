@@ -5,13 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import { useCart } from '../lib/useCart'
 import { formatMoney, initials, colorFromString } from '../lib/format'
 
-const FORMAS_PAGO = [
-  { value: 'EFECTIVO', label: 'Efectivo' },
-  { value: 'TARJETA', label: 'Tarjeta' },
-  { value: 'TRANSFERENCIA', label: 'Transferencia' },
-  { value: 'CTA_CTE', label: 'Cta. corriente' },
-]
-
 export default function NuevaVenta() {
   const navigate = useNavigate()
   const { usuario } = useAuth()
@@ -25,6 +18,7 @@ export default function NuevaVenta() {
   const [loadError, setLoadError] = useState(null)
 
   const [formaPago, setFormaPago] = useState(null)
+  const [formasPago, setFormasPago] = useState([])
   const [clientes, setClientes] = useState([])
   const [clienteId, setClienteId] = useState('')
   const [vendiendo, setVendiendo] = useState(false)
@@ -34,18 +28,25 @@ export default function NuevaVenta() {
     let mounted = true
     async function cargar() {
       setLoading(true)
-      const [{ data: cats, error: e1 }, { data: prods, error: e2 }] = await Promise.all([
-        supabase.from('categorias_productos').select('id, nombre').order('nombre'),
-        supabase
-          .from('productos')
-          .select('id, categoria_id, nombre, precio_venta, stock_actual, activo, imagen_url')
-          .eq('activo', true)
-          .order('nombre'),
-      ])
+      const [{ data: cats, error: e1 }, { data: prods, error: e2 }, { data: fps, error: e3 }] =
+        await Promise.all([
+          supabase.from('categorias_productos').select('id, nombre').order('nombre'),
+          supabase
+            .from('productos')
+            .select('id, categoria_id, nombre, precio_venta, stock_actual, activo, imagen_url')
+            .eq('activo', true)
+            .order('nombre'),
+          supabase
+            .from('formas_pago')
+            .select('id, nombre, codigo, requiere_cliente')
+            .eq('activo', true)
+            .order('nombre'),
+        ])
       if (!mounted) return
-      if (e1 || e2) setLoadError((e1 || e2).message)
+      if (e1 || e2 || e3) setLoadError((e1 || e2 || e3).message)
       setCategorias(cats ?? [])
       setProductos(prods ?? [])
+      setFormasPago(fps ?? [])
       setLoading(false)
     }
     cargar()
@@ -54,15 +55,18 @@ export default function NuevaVenta() {
     }
   }, [])
 
+  const formaPagoSeleccionada = formasPago.find((fp) => fp.codigo === formaPago)
+  const requiereCliente = formaPagoSeleccionada?.requiere_cliente ?? false
+
   useEffect(() => {
-    if (formaPago !== 'CTA_CTE' || clientes.length > 0) return
+    if (!requiereCliente || clientes.length > 0) return
     supabase
       .from('clientes')
       .select('id, nombre')
       .eq('activo', true)
       .order('nombre')
       .then(({ data }) => setClientes(data ?? []))
-  }, [formaPago, clientes.length])
+  }, [requiereCliente, clientes.length])
 
   useEffect(() => {
     if (!toast) return
@@ -91,7 +95,7 @@ export default function NuevaVenta() {
 
   async function confirmarVenta() {
     if (!formaPago || cart.items.length === 0) return
-    if (formaPago === 'CTA_CTE' && !clienteId) return
+    if (requiereCliente && !clienteId) return
 
     setVendiendo(true)
     try {
@@ -99,7 +103,7 @@ export default function NuevaVenta() {
         .from('ventas')
         .insert({
           club_id: usuario.club_id,
-          cliente_id: formaPago === 'CTA_CTE' ? clienteId : null,
+          cliente_id: requiereCliente ? clienteId : null,
           subtotal: cart.total,
           total: cart.total,
           forma_pago: formaPago,
@@ -174,6 +178,8 @@ export default function NuevaVenta() {
           cart={cart}
           formaPago={formaPago}
           setFormaPago={setFormaPago}
+          formasPago={formasPago}
+          requiereCliente={requiereCliente}
           clientes={clientes}
           clienteId={clienteId}
           setClienteId={setClienteId}
@@ -325,6 +331,8 @@ function CarritoView({
   cart,
   formaPago,
   setFormaPago,
+  formasPago,
+  requiereCliente,
   clientes,
   clienteId,
   setClienteId,
@@ -333,7 +341,7 @@ function CarritoView({
   vendiendo,
 }) {
   const puedeVender =
-    cart.items.length > 0 && formaPago && !(formaPago === 'CTA_CTE' && !clienteId) && !vendiendo
+    cart.items.length > 0 && formaPago && !(requiereCliente && !clienteId) && !vendiendo
 
   return (
     <div className="px-5 pt-6 pb-36">
@@ -394,23 +402,29 @@ function CarritoView({
           </div>
 
           <p className="text-muted text-sm mb-2">Forma de pago</p>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {FORMAS_PAGO.map((fp) => (
-              <button
-                key={fp.value}
-                onClick={() => setFormaPago(fp.value)}
-                className={`h-14 rounded-xl border font-medium transition active:scale-[0.97] ${
-                  formaPago === fp.value
-                    ? 'bg-cancha text-ink border-cancha'
-                    : 'bg-surface text-foam border-line'
-                }`}
-              >
-                {fp.label}
-              </button>
-            ))}
-          </div>
+          {formasPago.length === 0 ? (
+            <p className="text-alerta text-sm mb-4">
+              Todavía no hay formas de pago cargadas para este club.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {formasPago.map((fp) => (
+                <button
+                  key={fp.id}
+                  onClick={() => setFormaPago(fp.codigo)}
+                  className={`h-14 rounded-xl border font-medium transition active:scale-[0.97] ${
+                    formaPago === fp.codigo
+                      ? 'bg-cancha text-ink border-cancha'
+                      : 'bg-surface text-foam border-line'
+                  }`}
+                >
+                  {fp.nombre}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {formaPago === 'CTA_CTE' && (
+          {requiereCliente && (
             <div className="mb-4">
               <label className="block text-muted text-sm mb-1.5" htmlFor="cliente">
                 Cliente

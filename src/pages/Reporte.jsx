@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { formatMoney } from '../lib/format'
 
-const FORMAS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'CTA_CTE']
-
 function hoyISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -14,11 +12,26 @@ export default function Reporte() {
   const navigate = useNavigate()
   const [fecha, setFecha] = useState(hoyISO())
   const [formaPago, setFormaPago] = useState('TODAS')
+  const [formasPago, setFormasPago] = useState([]) // todas (activas e inactivas), para poder mostrar ventas viejas
   const [ventas, setVentas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [abierta, setAbierta] = useState(null)
   const [detalles, setDetalles] = useState({})
+
+  useEffect(() => {
+    supabase
+      .from('formas_pago')
+      .select('id, nombre, codigo')
+      .order('nombre')
+      .then(({ data }) => setFormasPago(data ?? []))
+  }, [])
+
+  const nombreFormaPago = useMemo(() => {
+    const map = {}
+    formasPago.forEach((fp) => (map[fp.codigo] = fp.nombre))
+    return (codigo) => map[codigo] ?? codigo
+  }, [formasPago])
 
   useEffect(() => {
     let mounted = true
@@ -111,9 +124,9 @@ export default function Reporte() {
             className="w-full h-12 rounded-xl bg-surface border border-line px-3 text-foam"
           >
             <option value="TODAS">Todas</option>
-            {FORMAS_PAGO.map((fp) => (
-              <option key={fp} value={fp}>
-                {fp}
+            {formasPago.map((fp) => (
+              <option key={fp.id} value={fp.codigo}>
+                {fp.nombre}
               </option>
             ))}
           </select>
@@ -139,7 +152,7 @@ export default function Reporte() {
               <div className="border-t border-line pt-3 space-y-1.5">
                 {Object.entries(resumen.porFormaPago).map(([fp, monto]) => (
                   <div key={fp} className="flex items-center justify-between text-sm">
-                    <span className="text-muted">{fp}</span>
+                    <span className="text-muted">{nombreFormaPago(fp)}</span>
                     <span className="text-foam font-medium">{formatMoney(monto)}</span>
                   </div>
                 ))}
@@ -167,7 +180,7 @@ export default function Reporte() {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}{' '}
-                        · {v.forma_pago}
+                        · {nombreFormaPago(v.forma_pago)}
                       </p>
                       {v.clientes?.nombre && (
                         <p className="text-muted text-sm">{v.clientes.nombre}</p>

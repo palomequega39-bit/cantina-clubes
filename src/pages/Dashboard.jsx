@@ -54,6 +54,17 @@ export default function Dashboard() {
           </div>
           <span className="text-4xl font-display text-gol">→</span>
         </Link>
+
+        <Link
+          to="/clientes"
+          className="rounded-2xl bg-surface border border-line p-6 flex items-center justify-between active:scale-[0.98] transition"
+        >
+          <div>
+            <p className="font-display text-2xl font-semibold text-foam">Clientes</p>
+            <p className="text-muted mt-1">Cuenta corriente y pagos</p>
+          </div>
+          <span className="text-4xl font-display text-gol">→</span>
+        </Link>
       </div>
 
       <p className="text-center text-muted/60 text-xs mt-8">
